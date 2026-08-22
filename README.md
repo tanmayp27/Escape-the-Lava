@@ -68,8 +68,6 @@ The project follows a modular, event-driven architecture in Unity using C# and t
 
 ### Gameplay Video
 
-[![Watch Gameplay Video]](docs/videos/gameplay.mp4?raw=true)
-
 [▶️ **Click here to watch / download the full Gameplay Video (MP4)**](docs/videos/gameplay.mp4?raw=true)
 
 ### Screenshots
