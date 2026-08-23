@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -12,18 +13,34 @@ public class UIManager : MonoBehaviour
     public TMP_Text livesText;
     public TMP_Text timerText;
 
-    [Header("Lives UI Emergency Animation Settings")]
-    [Tooltip("Background Image component behind the Lives text display.")]
+    [Header("Lives UI Dynamic Settings")]
+    [Tooltip("Background Image component behind the Lives display.")]
     public Image livesBgImage;
+
+    [Tooltip("Prefab for individual heart UI object containing Image and Animator.")]
+    public GameObject heartPrefab;
+
+    [Tooltip("Parent transform for instantiated heart prefabs (Lives -> HeartContainer).")]
+    public Transform heartContainer;
+
+    [Tooltip("Animator Trigger parameter name for heartbreak animation.")]
+    public string heartbreakTriggerName = "Heartbreak";
+
+    [Tooltip("Duration in seconds before destroying the heartbreak heart object.")]
+    public float heartbreakDelay = 1.15f;
 
     [Tooltip("Speed of the flashing animation when lives fall below 3.")]
     public float livesFlashSpeed = 6.0f;
+
+    [Tooltip("Speed multiplier for remaining heart animators during low health (< 3 lives) or low timer (<= 10s).")]
+    public float urgentHeartSpeedMultiplier = 2.5f;
 
     private Color defaultLivesBgColor = Color.white;
     private Color defaultLivesTextColor = Color.white;
     private bool isDefaultColorsCached = false;
     private bool isFlashingActive = false;
     private int currentLivesTracked = 5;
+    private readonly List<GameObject> activeHeartList = new List<GameObject>();
 
     [Header("Timer UI Urgency Settings")]
     [Tooltip("Flashing animation speed when remaining time falls under 10 seconds.")]
@@ -77,6 +94,8 @@ public class UIManager : MonoBehaviour
     {
         EnsureEventSystem();
         EnsureResponsiveCanvasScaler();
+
+        ClearHeartContainer();
 
         if (GameManager.Instance != null)
         {
@@ -145,6 +164,18 @@ public class UIManager : MonoBehaviour
             pausePanel.SetActive(false);
         }
         Time.timeScale = 1f;
+    }
+
+    private void ClearHeartContainer()
+    {
+        activeHeartList.Clear();
+        if (heartContainer != null)
+        {
+            foreach (Transform child in heartContainer)
+            {
+                Destroy(child.gameObject);
+            }
+        }
     }
 
     // Ensures an EventSystem with InputSystemUIInputModule exists in the scene.
@@ -226,6 +257,8 @@ public class UIManager : MonoBehaviour
             isTimerFlashingActive = false;
             ResetTimerColor();
         }
+
+        UpdateHeartAnimatorSpeeds();
     }
 
     // Animates Lives UI color pulsing when health is critically low.
@@ -310,6 +343,114 @@ public class UIManager : MonoBehaviour
         {
             ResetLivesColors();
         }
+
+        if (heartContainer != null && heartPrefab != null)
+        {
+            // On game restart or when lives increase, clear existing container and rebuild all hearts simultaneously so animators remain synchronized
+            if (lives > activeHeartList.Count)
+            {
+                ClearHeartContainer();
+            }
+
+            // Instantiate missing hearts up to current lives
+            while (activeHeartList.Count < lives)
+            {
+                GameObject newHeart = Instantiate(heartPrefab, heartContainer);
+                newHeart.transform.localScale = Vector3.one;
+                activeHeartList.Add(newHeart);
+            }
+
+            // Remove extra hearts and play heartbreak animation on the last prefab in the list
+            while (activeHeartList.Count > lives)
+            {
+                int lastIndex = activeHeartList.Count - 1;
+                GameObject heartToRemove = activeHeartList[lastIndex];
+                activeHeartList.RemoveAt(lastIndex);
+
+                if (heartToRemove != null)
+                {
+                    StartCoroutine(PlayHeartbreakRoutine(heartToRemove));
+                }
+            }
+
+            UpdateHeartAnimatorSpeeds();
+        }
+    }
+
+    // Adjusts animation speed of all active hearts when at low health (< 3) or low timer (<= 10s).
+    private void UpdateHeartAnimatorSpeeds()
+    {
+        if (activeHeartList.Count == 0) return;
+
+        bool isUrgent = (currentLivesTracked < 3 || (currentRemainingTimeTracked <= 10f && currentRemainingTimeTracked > 0f));
+        float speedMultiplier = isUrgent ? urgentHeartSpeedMultiplier : 1.0f;
+
+        for (int i = activeHeartList.Count - 1; i >= 0; i--)
+        {
+            GameObject heart = activeHeartList[i];
+            if (heart == null)
+            {
+                activeHeartList.RemoveAt(i);
+                continue;
+            }
+
+            Animator anim = heart.GetComponent<Animator>();
+            if (anim != null)
+            {
+                anim.speed = speedMultiplier;
+            }
+        }
+    }
+
+    // Plays the heartbreak animation trigger and waits until the animation clip completes before destroying the GameObject.
+    private System.Collections.IEnumerator PlayHeartbreakRoutine(GameObject heartToRemove)
+    {
+        if (heartToRemove == null) yield break;
+
+        Animator anim = heartToRemove.GetComponent<Animator>();
+        float waitDuration = heartbreakDelay;
+
+        if (anim != null)
+        {
+            anim.speed = 1.0f; // Heartbreak always plays at normal 1.0x speed
+
+            if (!string.IsNullOrEmpty(heartbreakTriggerName))
+            {
+                anim.SetTrigger(heartbreakTriggerName);
+            }
+
+            // Wait 1 frame for animator state transition to take effect
+            yield return null;
+
+            if (heartToRemove == null) yield break;
+
+            AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(0);
+            if (stateInfo.length > 0f)
+            {
+                waitDuration = stateInfo.length;
+            }
+            else
+            {
+                var clipInfo = anim.GetCurrentAnimatorClipInfo(0);
+                if (clipInfo.Length > 0 && clipInfo[0].clip != null)
+                {
+                    waitDuration = clipInfo[0].clip.length;
+                }
+            }
+        }
+
+        float elapsed = 0f;
+        while (elapsed < waitDuration)
+        {
+            if (heartToRemove == null) yield break;
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (heartToRemove != null)
+        {
+            Destroy(heartToRemove);
+        }
     }
 
     private void ResetLivesColors()
@@ -335,6 +476,8 @@ public class UIManager : MonoBehaviour
         {
             ResetTimerColor();
         }
+
+        UpdateHeartAnimatorSpeeds();
     }
 
     private void AnimateTimerTextFlash()
