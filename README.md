@@ -43,6 +43,7 @@ The project follows a modular, event-driven architecture in Unity using C# and t
 
 ### 4. User Interface Controller (`UIManager.cs`)
 * **Core Responsibilities**: Controls HUD text displays (Score, Lives, Timer), outcome overlays, and the Pause Menu.
+* **Dynamic Heart UI Container**: Instantiates animated heart prefabs under a horizontal layout group (`Lives -> HeartContainer`), playing heartbreak animations on individual lost lives and dynamically scaling heartbeat animation speeds when at low health or low remaining time.
 * **Visual Urgency Effects**: 
   * Animates smooth background/text color pulsing on the Lives UI when health drops below 3.
   * Flashes the Timer UI red when less than 10 seconds remain.
@@ -65,6 +66,10 @@ The project follows a modular, event-driven architecture in Unity using C# and t
 ---
 
 ## Media
+
+### Gameplay Video
+📹 **[Watch Gameplay Video Folder (Google Drive)](https://drive.google.com/drive/folders/1_njAbesaPQkrDkiQ7AH2X2Aw_Q3W5Aar?usp=sharing)**
+> *Note: **v2** is the latest build featuring minor UI changes, dynamic heart animations, and gameplay improvements.*
 
 ### Screenshots
 
